@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "id": "gabrielbdornas.ress",
+  "name": "ress",
+  "version": "1.1.0",
+  "author": "Gabriel Dornas (based on ress by Tyler South)",
+  "license": "MIT",
+  "description": "Capture this machine \u2014 packages, dotfiles, themes, web apps, plugins \u2014 and replay it onto a fresh Omarchy install. Share the loadout as a link.",
+  "homepage": "https://github.com/gabrielbdornas/dotfiles",
+  "kinds": [
+    "bar-widget",
+    "service"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml",
+    "service": "Service.qml"
+  },
+  "barWidget": {
+    "displayName": "ress",
+    "description": "Backup freshness at a glance, with one button to capture this machine and one to bring it back.",
+    "category": "System",
+    "aliases": [
+      "ress",
+      "resurrect",
+      "backup",
+      "restore"
+    ],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "staleHours": 48
+    },
+    "schema": [
+      {
+        "key": "staleHours",
+        "type": "integer",
+        "label": "Call a backup stale after (hours)",
+        "min": 1,
+        "max": 720,
+        "step": 1,
+        "defaultValue": 48,
+        "description": "How old the last backup has to be before the bar icon dims."
+      }
+    ]
+  }
+}

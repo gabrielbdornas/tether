@@ -1,0 +1,13 @@
+# ress — live-symlink capture list (opt-in, empty by default).
+#
+# One path per line, relative to $HOME, same format as `include`. A path
+# listed here is NOT copied point-in-time by `ress backup`/`ress restore`
+# the way `include` entries are: it is symlinked into the vault instead, so
+# every edit on either side is the same inode from then on — no explicit
+# "backup" step needed to keep it current.
+#
+# Listing a path here is enough on its own — it does not also need to be on
+# `include`. Add your own in ~/.config/ress/symlink.
+#
+# Example:
+# .claude
