@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Mutation testing for the ress suite.
+# Mutation testing for the tether suite.
 #
 #   tests/mutate.sh              run every mutation
 #   tests/mutate.sh aur          run the ones whose name matches "aur"
@@ -17,7 +17,7 @@ set -uo pipefail
 
 TESTS_DIR=$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 SRC=$(dirname "$TESTS_DIR")
-WORK="${TMPDIR:-/tmp}/ress-mutation.$$"
+WORK="${TMPDIR:-/tmp}/tether-mutation.$$"
 FILTER="${1:-}"
 
 trap 'rm -rf "$WORK"' EXIT
@@ -35,7 +35,7 @@ run_mutation() {
   cp -a "$SRC" "$dir"
   rm -rf "$dir/.git"
 
-  python3 - "$dir/bin/ress" "$old" "$new" <<'PY'
+  python3 - "$dir/bin/ttr" "$old" "$new" <<'PY'
 import sys, pathlib
 path, old, new = sys.argv[1], sys.argv[2], sys.argv[3]
 p = pathlib.Path(path); s = p.read_text()
@@ -50,7 +50,7 @@ PY
     rm -rf "$dir"
     return 0
   fi
-  if ! bash -n "$dir/bin/ress" 2>/dev/null; then
+  if ! bash -n "$dir/bin/ttr" 2>/dev/null; then
     printf '  \e[35m?\e[0m %-24s mutation does not parse\n' "$name"
     skipped=$((skipped + 1))
     rm -rf "$dir"
@@ -124,16 +124,6 @@ run_mutation verify-always-complete \
 run_mutation verify-ignores-packages \
   'missing[packages]=$(comm -23 "$wanted_pkgs" "$installed" | tr' \
   'missing[packages]=$(true | tr'
-
-# ---- the vault format -----------------------------------------------------
-
-run_mutation manifest-no-legacy \
-  '[[ -f $VAULT/$VAULT_MANIFEST_LEGACY ]] && { printf '"'"'%s'"'"' "$VAULT/$VAULT_MANIFEST_LEGACY"; return 0; }' \
-  ':'
-
-run_mutation bak-suffix-old \
-  'BAK_SUFFIX=".ress-bak"' \
-  'BAK_SUFFIX=".resurrect-bak"'
 
 # ---- restore mechanics ----------------------------------------------------
 

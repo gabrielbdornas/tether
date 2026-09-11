@@ -6,7 +6,7 @@
 # remote get the rewrite, injected as `-c url.<local>.insteadOf=<https>`, so
 # `git remote get-url` still reports the https URL the vault should record.
 # Rewriting globally would have capture record a /tmp path and restore then
-# refuse it as an unsafe remote — an artefact of the test, not of ress.
+# refuse it as an unsafe remote — an artefact of the test, not of tether.
 source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 
 real=""

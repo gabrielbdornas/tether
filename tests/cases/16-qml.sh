@@ -1,4 +1,4 @@
-# The QML half. bin/ress is covered by everything else here; Panel.qml,
+# The QML half. bin/ttr is covered by everything else here; Panel.qml,
 # Service.qml and Model.js are not, and a broken binding is a widget that
 # vanishes from the bar with an error only the shell's log ever sees.
 

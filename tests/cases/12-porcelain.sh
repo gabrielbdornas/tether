@@ -13,22 +13,22 @@ printf 'ripgrep\n' >"$VAULT/packages/native.txt"
 printf 'brave-bin\n' >"$VAULT/packages/foreign.txt"
 seal_vault "$VAULT"
 
-# Everything ress itself writes is a record. (A subprocess ress calls may print
-# its own output — pacman does — so only ress's own lines are checked, which is
-# what the panel's parser sees as unparseable noise it must tolerate.)
-only_ress_lines() {
+# Everything tether itself writes is a record. (A subprocess tether calls may
+# print its own output — pacman does — so only tether's own lines are checked,
+# which is what the panel's parser sees as unparseable noise it must tolerate.)
+only_ttr_lines() {
   printf '%s\n' "$OUT" | grep -vE '^(installed|built) ' || true
 }
 assert_protocol() {
   local bad
-  bad=$(only_ress_lines | grep -vE '^(BEGIN|STEP|PROGRESS|LOG|DONE)\|' | grep -c . || true)
-  assert_equals "$bad" "0" "${1:-every line is a protocol record}" 
-  [[ $bad == 0 ]] || only_ress_lines | grep -vE '^(BEGIN|STEP|PROGRESS|LOG|DONE)\|' >&2
+  bad=$(only_ttr_lines | grep -vE '^(BEGIN|STEP|PROGRESS|LOG|DONE)\|' | grep -c . || true)
+  assert_equals "$bad" "0" "${1:-every line is a protocol record}"
+  [[ $bad == 0 ]] || only_ttr_lines | grep -vE '^(BEGIN|STEP|PROGRESS|LOG|DONE)\|' >&2
 }
 
 # ---- restore ---------------------------------------------------------------
 
-ress --porcelain --vault "$VAULT" restore --yes
+ttr --porcelain --vault "$VAULT" restore --yes
 assert_ok "porcelain restore"
 assert_protocol "restore emits only records"
 
@@ -44,9 +44,9 @@ assert_output "LOG|left for later: 1 AUR package not built"
 
 # ---- backup ----------------------------------------------------------------
 
-ress init >/dev/null
+ttr init >/dev/null
 printf 'TOKEN=ghp_A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8\n' >"$HOME/.local/bin/deploy"
-ress --porcelain backup -m porcelain
+ttr --porcelain backup -m porcelain
 assert_ok "porcelain backup"
 assert_protocol "backup emits only records"
 assert_output "STEP|secrets|warn|possible credentials in 1 file"
@@ -55,8 +55,8 @@ assert_no_output "ghp_A1b2" "and the match is never in it"
 
 # ---- the blocked backup is a record, not a silent exit --------------------
 
-ress set SECRET_SCAN=block >/dev/null
-ress --porcelain backup -m blocked
+ttr set SECRET_SCAN=block >/dev/null
+ttr --porcelain backup -m blocked
 assert_fails "porcelain backup blocked"
 assert_output "DONE|fail|blocked by the secret scan"
 assert_protocol "a blocked backup emits only records too"
@@ -66,8 +66,8 @@ assert_no_output "Nothing was committed" "the explanation is for a person, not f
 
 REMOTE="$SANDBOX/remote.git"
 git init -q --bare "$REMOTE"
-ress set REMOTE="$REMOTE" >/dev/null
-ress backup -m blocked --push
+ttr set REMOTE="$REMOTE" >/dev/null
+ttr backup -m blocked --push
 assert_fails "block fails the backup"
 assert_output "Nothing was committed"
 assert_equals "$(git -C "$REMOTE" rev-list --count --all 2>/dev/null || echo 0)" "0" \

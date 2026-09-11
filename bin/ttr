@@ -1,6 +1,7 @@
 #!/bin/bash
 #
-# ress — capture an Omarchy machine, replay it onto a fresh one.
+# tether — capture an Omarchy machine, replay it onto a fresh one, or keep it
+# live-synced across machines.
 #
 # This is the whole engine. The Quickshell panel is a face on top of it; every
 # button there is one of these subcommands with --porcelain. That split is
@@ -9,16 +10,12 @@
 
 set -euo pipefail
 
-VERSION="1.1.0"
+VERSION="1.2.0"
 SCHEMA=1
 
 # The vault's manifest and the suffix restore leaves on anything it replaces.
-# Both were named after the project's old name; both are read under either name
-# forever, because a vault written last year is still a vault.
-VAULT_MANIFEST="ress.json"
-VAULT_MANIFEST_LEGACY="resurrect.json"
-BAK_SUFFIX=".ress-bak"
-BAK_SUFFIX_LEGACY=".resurrect-bak"
+VAULT_MANIFEST="tether.json"
+BAK_SUFFIX=".tether-bak"
 
 # ---------------------------------------------------------------- locations
 
@@ -43,10 +40,10 @@ DEFAULTS_DIR="$PLUGIN_DIR/defaults"
 # the ones installed system-wide.
 OMARCHY_DIR="${OMARCHY_PATH:-/usr/share/omarchy}"
 
-CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/ress"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/tether"
 CONFIG_FILE="$CONFIG_DIR/config"
-STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/ress"
-DEFAULT_VAULT="${XDG_DATA_HOME:-$HOME/.local/share}/ress/vault"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/tether"
+DEFAULT_VAULT="${XDG_DATA_HOME:-$HOME/.local/share}/tether/vault"
 
 CATEGORIES=(packages config omarchy webapps plugins secrets)
 
@@ -79,7 +76,7 @@ note()       { emit "LOG|$1";           (( PORCELAIN )) || printf '  %s%s%s\n' "
 
 die() {
   emit "DONE|fail|$*"
-  printf '%sress: %s%s\n' "$c_red" "$*" "$c_reset" >&2
+  printf '%stether: %s%s\n' "$c_red" "$*" "$c_reset" >&2
   exit 1
 }
 
@@ -141,7 +138,7 @@ save_config() {
   private_dir "$CONFIG_DIR"
   local tmp; tmp=$(mktemp "$CONFIG_DIR/.config.XXXXXX")
   {
-    echo "# ress configuration. Written by \`ress set\` and by the panel."
+    echo "# tether configuration. Written by \`ttr set\` and by the panel."
     echo "# Both the CLI and the Quickshell panel read this file; there is no second source."
     echo
     local key
@@ -182,15 +179,15 @@ private_dir() { mkdir -p "$1" && chmod 700 "$1" 2>/dev/null || true; }
 # separate ideas of "busy". Without a lock they will both write the same git
 # vault; without the marker file the bar shows nothing while the scheduler runs.
 DRYRUN_VAULT=""
-ress_cleanup() {
+tether_cleanup() {
   [[ -n ${DRYRUN_VAULT:-} ]] && rm -rf "$DRYRUN_VAULT" 2>/dev/null
   [[ -n ${STATE_DIR:-} ]] && rm -f "$STATE_DIR/running" 2>/dev/null
   [[ -n ${APPLY_WORK:-} ]] && rm -rf "$APPLY_WORK" 2>/dev/null
   return 0
 }
-trap ress_cleanup EXIT
+trap tether_cleanup EXIT
 
-# `ress set` is a read-modify-write of one small file, and the panel fires one
+# `ttr set` is a read-modify-write of one small file, and the panel fires one
 # per toggle through execDetached — nine rows now write this way. Two in quick
 # succession could read the same config and the later one drop the earlier one's
 # change. This is deliberately not the vault lock: a settings change is not
@@ -204,7 +201,7 @@ take_config_lock() {
 take_lock() {
   private_dir "$STATE_DIR"
   exec 9>"$STATE_DIR/lock"
-  flock -n 9 || die "another ress operation is already running"
+  flock -n 9 || die "another tether operation is already running"
   # The lock is still taken for a dry run — it clones into a temp directory and
   # reads the vault, and two of those at once is still two — but the marker the
   # bar reads as "busy" is not written, because nothing is happening to this
@@ -246,15 +243,12 @@ merged_list() {
 
 git_vault() { git -C "$VAULT" "$@"; }
 
-# Where this vault keeps its manifest. New vaults use ress.json; one written
-# before the rename is read where it lies, and moved on its next backup.
+# Where this vault keeps its manifest.
 manifest_path() {
-  [[ -f $VAULT/$VAULT_MANIFEST ]] && { printf '%s' "$VAULT/$VAULT_MANIFEST"; return 0; }
-  [[ -f $VAULT/$VAULT_MANIFEST_LEGACY ]] && { printf '%s' "$VAULT/$VAULT_MANIFEST_LEGACY"; return 0; }
   printf '%s' "$VAULT/$VAULT_MANIFEST"
 }
 
-has_manifest() { [[ -f $VAULT/$VAULT_MANIFEST || -f $VAULT/$VAULT_MANIFEST_LEGACY ]]; }
+has_manifest() { [[ -f $VAULT/$VAULT_MANIFEST ]]; }
 
 ensure_vault_repo() {
   private_dir "$VAULT"
@@ -263,11 +257,11 @@ ensure_vault_repo() {
     git_vault config user.name "$(git config --global user.name 2>/dev/null || echo "$USER")"
     git_vault config user.email "$(git config --global user.email 2>/dev/null || echo "$USER@$(hostname)")"
     printf '%s\n' \
-      "# ress vault" "" \
+      "# tether vault" "" \
       "This directory is a snapshot of an Omarchy machine, written by" \
-      "[ress](https://github.com/btsouth/omarchy-resurrect)." "" \
+      "[tether](https://github.com/gabrielbdornas/tether)." "" \
       "Replay it onto a fresh install with:" "" \
-      '```bash' "ress restore --vault $VAULT" '```' >"$VAULT/README.md"
+      '```bash' "ttr restore --vault $VAULT" '```' >"$VAULT/README.md"
   fi
 }
 
@@ -423,11 +417,10 @@ capture_config() {
     [[ -e $HOME/$entry ]] || continue
     while IFS= read -r link; do
       # *.wants/ links are systemd enable-state, captured separately as unit
-      # names; *$BAK_SUFFIX are our own leftovers, under either of the two names
-      # ress has used. Neither is lost, so neither belongs in a report about
-      # things that did not travel.
+      # names; *$BAK_SUFFIX are our own leftovers. Neither is lost, so neither
+      # belongs in a report about things that did not travel.
       [[ $link == */.wants/* || $link == *.wants/* ]] && continue
-      [[ $link == *"$BAK_SUFFIX" || $link == *"$BAK_SUFFIX_LEGACY" ]] && continue
+      [[ $link == *"$BAK_SUFFIX" ]] && continue
       target=$(readlink -f "$link" 2>/dev/null || true)
       [[ -n $target && $target == "$HOME"/* ]] && continue
       printf '%s -> %s\n' "${link#"$HOME"/}" "${target:-<broken>}" >>"$skipped/symlinks-skipped.txt"
@@ -554,7 +547,7 @@ capture_secrets() {
     return 0
   fi
   if [[ ! -f $list ]]; then
-    step_skip secrets "no secrets list — run: ress secrets init"
+    step_skip secrets "no secrets list — run: ttr secrets init"
     return 0
   fi
 
@@ -575,7 +568,7 @@ capture_secrets() {
       ;;
     *)
       if (( PORCELAIN )) || [[ ! -t 0 ]]; then
-        step_skip secrets "passphrase mode needs a terminal — run: ress backup"
+        step_skip secrets "passphrase mode needs a terminal — run: ttr backup"
         return 0
       fi
       args=(-p)
@@ -707,7 +700,7 @@ secret_scan_mode() {
   esac
 }
 
-# One place that renders findings, so `ress backup` and `ress scan` cannot drift
+# One place that renders findings, so `ttr backup` and `ttr scan` cannot drift
 # into describing the same thing two ways.
 report_secret_findings() {
   local count; count=$(printf '%s\n' "$SECRET_FINDINGS" | grep -c . || true)
@@ -719,7 +712,7 @@ report_secret_findings() {
   local first; first=$(printf '%s\n' "$SECRET_FINDINGS" | head -1 | cut -f1)
   printf '    echo %s >> %s/exclude\n' "${first#home/}" "$CONFIG_DIR"
   printf '%sOr, if it belongs in the vault, put it in the encrypted category:%s\n' "$c_dim" "$c_reset"
-  printf '    ress secrets add %s\n' "${first#home/}"
+  printf '    ttr secrets add %s\n' "${first#home/}"
   return 0
 }
 
@@ -748,18 +741,9 @@ write_manifest() {
       --argjson uncaptured "${CAPTURED_UNCAPTURED:-0}" \
       --argjson services "${CAPTURED_UNITS:-0}" \
       '$ARGS.named')" \
-    '{schemaVersion: $schema, ressVersion: $version, createdAt: $createdAt,
+    '{schemaVersion: $schema, tetherVersion: $version, createdAt: $createdAt,
       machine: {hostname: $hostname, user: $user, omarchy: $omarchy, kernel: $kernel},
       categories: $categories, counts: $counts}' >"$VAULT/$VAULT_MANIFEST"
-
-  # A vault written before the rename carries the old manifest. The new one has
-  # just been written beside it with the same contents under the same schema, so
-  # the old one is removed rather than left to rot as a second answer to "when
-  # was this taken". The vault is a git repo: the move is in its history.
-  if [[ -f $VAULT/$VAULT_MANIFEST_LEGACY ]]; then
-    rm -f "$VAULT/$VAULT_MANIFEST_LEGACY"
-    note "vault manifest renamed to $VAULT_MANIFEST"
-  fi
 }
 
 # ==================================================================== BACKUP
@@ -1143,7 +1127,7 @@ restore_packages() {
       # Not a failure: you were asked and said no. Not done either, so the next
       # run asks again rather than walking past it.
       (( ${#AUR_KEPT[@]} > 0 )) &&
-        mark_partial packages "$(plural "${#AUR_KEPT[@]}" "AUR package") not built — ress restore --only packages --aur"
+        mark_partial packages "$(plural "${#AUR_KEPT[@]}" "AUR package") not built — ttr restore --only packages --aur"
     elif aur_install packages "${AUR_KEPT[@]}"; then
       step_ok packages "AUR packages installed"
     else
@@ -1236,7 +1220,7 @@ pending_units() {
   done <"$file"
 }
 
-# A unit ress can enable is one that exists here: either restored into
+# A unit tether can enable is one that exists here: either restored into
 # ~/.config/systemd/user or shipped by a package.
 unit_installed() {
   [[ -f $HOME/.config/systemd/user/$1 ]] && return 0
@@ -1311,7 +1295,7 @@ restore_user_units() {
     no)
       local why="--no-enable-units"
       [[ ${UNITS_CHOICE:-} == no ]] || why="ENABLE_UNITS=no"
-      step_skip units "$(plural "${#units[@]}" "user service") left disabled ($why) — run: ress enable-units"
+      step_skip units "$(plural "${#units[@]}" "user service") left disabled ($why) — run: ttr enable-units"
       return 0
       ;;
     yes)
@@ -1324,10 +1308,10 @@ restore_user_units() {
   esac
 
   # ask. Without a terminal there is nobody to ask, and --yes deliberately does
-  # not answer this one: it is the prompt for ress overwriting your files, not
+  # not answer this one: it is the prompt for tether overwriting your files, not
   # a standing agreement to start services from a vault.
   if (( PORCELAIN )) || [[ ! -t 0 ]]; then
-    step_skip units "$(plural "${#units[@]}" "user service") left disabled (no terminal) — run: ress enable-units"
+    step_skip units "$(plural "${#units[@]}" "user service") left disabled (no terminal) — run: ttr enable-units"
     return 0
   fi
 
@@ -1341,7 +1325,7 @@ restore_user_units() {
     enable_units "${units[@]}"
     step_ok units "$(plural "$ENABLED_UNITS" "user service") enabled"
   else
-    step_skip units "left disabled — run: ress enable-units to change your mind"
+    step_skip units "left disabled — run: ttr enable-units to change your mind"
   fi
   return 0
 }
@@ -1523,7 +1507,7 @@ restore_webapps() {
 
   # A .desktop file *is* an Exec line, so none of them are copied. Each launcher
   # is read for a name, a URL and an icon name and rebuilt by the real installer
-  # — the same path `ress apply` takes for a stranger's loadout, and for the same
+  # — the same path `ttr apply` takes for a stranger's loadout, and for the same
   # reason: a vault fetched over the network chose this file's contents.
   local rows=() desktop exec_line execs name url icon refused=0
   for desktop in "$dir"/apps/*.desktop; do
@@ -1572,7 +1556,7 @@ restore_webapps() {
   if (( ${#rows[@]} > 0 )) && ! have omarchy; then
     # Retryable: once `omarchy` is on PATH a rerun should pick this up, so it
     # must not be marked done the way a warning would allow.
-    step_fail webapps "the omarchy CLI is not here — run: ress restore --only webapps once it is"
+    step_fail webapps "the omarchy CLI is not here — run: ttr restore --only webapps once it is"
     RESTORE_FAILED=1
     return 0
   fi
@@ -1677,7 +1661,7 @@ restore_secrets() {
   local blob="$VAULT/secrets/secrets.tar.age"
   [[ -f $blob ]] || { step_skip secrets "not in this vault"; return 0; }
   if ! have age; then
-    step_warn secrets "age is not installed — run: sudo pacman -S age, then: ress restore --only secrets"
+    step_warn secrets "age is not installed — run: sudo pacman -S age, then: ttr restore --only secrets"
     return 0
   fi
   if (( DRY_RUN )); then
@@ -1691,7 +1675,7 @@ restore_secrets() {
   # Only passphrase mode has anything to ask. Recipient mode is the unattended
   # one — refusing it for want of a terminal defeated the point of having it.
   if [[ ${CFG[SECRETS_MODE]} != recipient ]] && [[ ! -t 0 ]]; then
-    step_skip secrets "passphrase mode needs a terminal — run: ress restore --only secrets"
+    step_skip secrets "passphrase mode needs a terminal — run: ttr restore --only secrets"
     return 0
   fi
 
@@ -1705,7 +1689,7 @@ restore_secrets() {
     # the machine that needs the data. Say which mistake it was.
     local recipient="${CFG[SECRETS_RECIPIENT]}"
     if [[ $recipient == age1* && ! -e $recipient ]]; then
-      step_fail secrets "SECRETS_RECIPIENT is a recipient string, so there is no private key to find here — point it at the .pub file sitting next to its identity, then: ress restore --only secrets"
+      step_fail secrets "SECRETS_RECIPIENT is a recipient string, so there is no private key to find here — point it at the .pub file sitting next to its identity, then: ttr restore --only secrets"
       RESTORE_FAILED=1
       return 0
     fi
@@ -1806,7 +1790,7 @@ report_executable_content() {
   return 0
 }
 
-# `ress apply` shows the exact list before it asks. A restore asks the same
+# `ttr apply` shows the exact list before it asks. A restore asks the same
 # question about a bigger change, so it shows the same kind of list: the package
 # names this machine does not have, and the plugins that would be cloned. Read
 # through the same validators the restore itself uses, so the preview cannot
@@ -1975,7 +1959,7 @@ cmd_restore() {
   valid_int "$schema" ||
     die "this vault does not declare a schema version as a number — refusing to read it"
   (( schema == SCHEMA )) ||
-    die "vault schema $(plain "$schema") is not readable by ress $VERSION"
+    die "vault schema $(plain "$schema") is not readable by tether $VERSION"
 
   private_dir "$STATE_DIR"
   RESTORE_STATE="$STATE_DIR/restore.state"
@@ -2128,7 +2112,7 @@ cmd_status() {
     return 0
   fi
 
-  printf '%sress%s %s\n\n' "$c_bold" "$c_reset" "$VERSION"
+  printf '%stether%s %s\n\n' "$c_bold" "$c_reset" "$VERSION"
   printf '  vault      %s\n' "$VAULT"
   printf '  remote     %s\n' "${CFG[REMOTE]:-${c_dim}none${c_reset}}"
   if (( has_vault )); then
@@ -2142,7 +2126,7 @@ cmd_status() {
       + ", " + n(.counts.plugins; "plugin")' \
       "$(manifest_path)"
   else
-    printf '  %sno backup yet — run: ress backup%s\n' "$c_dim" "$c_reset"
+    printf '  %sno backup yet — run: ttr backup%s\n' "$c_dim" "$c_reset"
   fi
   printf '\n  categories '
   local category key
@@ -2172,12 +2156,12 @@ cmd_init() {
   private_dir "$CONFIG_DIR"
   [[ -f $CONFIG_DIR/include ]] || printf '%s\n' \
     "# Extra paths to capture, one per line, relative to \$HOME." \
-    "# These are added to the list shipped with ress." >"$CONFIG_DIR/include"
+    "# These are added to the list shipped with tether." >"$CONFIG_DIR/include"
   [[ -f $CONFIG_DIR/exclude ]] || printf '%s\n' \
     "# Extra rsync patterns to leave out of every capture." >"$CONFIG_DIR/exclude"
   printf 'Vault ready at %s\n' "$VAULT"
   [[ -n $remote ]] && printf 'Remote set to %s\n' "$remote"
-  printf 'Run: ress backup\n'
+  printf 'Run: ttr backup\n'
 }
 
 # Settings whose value is a choice rather than free text. A misspelled choice
@@ -2200,7 +2184,7 @@ declare -A CFG_CHOICES=(
 )
 
 cmd_set() {
-  (( $# > 0 )) || die "usage: ress set KEY=VALUE [KEY=VALUE...]"
+  (( $# > 0 )) || die "usage: ttr set KEY=VALUE [KEY=VALUE...]"
   # Validated in full before anything is written, so a run that is going to be
   # refused is refused without having changed half the settings first.
   local pair key value choice ok keys=() values=()
@@ -2253,16 +2237,16 @@ cmd_secrets() {
 .config/gh/hosts.yml
 .gnupg
 LIST
-        printf 'Wrote %s — edit it, then: ress set INCLUDE_SECRETS=1\n' "$CONFIG_DIR/secrets"
+        printf 'Wrote %s — edit it, then: ttr set INCLUDE_SECRETS=1\n' "$CONFIG_DIR/secrets"
       fi
       have age || printf '\n%sage is not installed. Run: sudo pacman -S age%s\n' "$c_yellow" "$c_reset"
       ;;
     list)
-      [[ -f $CONFIG_DIR/secrets ]] || die "no secrets list — run: ress secrets init"
+      [[ -f $CONFIG_DIR/secrets ]] || die "no secrets list — run: ttr secrets init"
       merged_list_file "$CONFIG_DIR/secrets"
       ;;
     add)
-      [[ -n ${1:-} ]] || die "usage: ress secrets add <path-relative-to-home>"
+      [[ -n ${1:-} ]] || die "usage: ttr secrets add <path-relative-to-home>"
       private_dir "$CONFIG_DIR"; touch "$CONFIG_DIR/secrets"
       printf '%s\n' "$1" >>"$CONFIG_DIR/secrets"
       printf 'Added %s\n' "$1"
@@ -2303,7 +2287,7 @@ cmd_verify() {
     esac
   done
   resolve_vault
-  has_manifest || die "no vault at $VAULT — run: ress backup"
+  has_manifest || die "no vault at $VAULT — run: ttr backup"
   local manifest; manifest=$(manifest_path)
 
   # Each category reports three things: how many the vault names, how many are
@@ -2427,7 +2411,7 @@ cmd_verify() {
     return 0
   fi
 
-  printf '%sress verify%s — this machine against %s taken from %s\n\n' \
+  printf '%stether verify%s — this machine against %s taken from %s\n\n' \
     "$c_bold" "$c_reset" \
     "$(plain "$(jq -r '.createdAt // "?"' "$manifest")")" \
     "$(plain "$(jq -r '.machine.hostname // "?"' "$manifest")")"
@@ -2461,12 +2445,12 @@ cmd_verify() {
     (( ${have[$other]} < ${want[$other]} )) && absent=1
   done
   if (( absent )); then
-    printf '%sSome of the vault is not on this machine.%s Run: ress restore\n' "$c_yellow" "$c_reset"
+    printf '%sSome of the vault is not on this machine.%s Run: ttr restore\n' "$c_yellow" "$c_reset"
     (( ${want[services]} > ${have[services]} )) &&
-      printf '%sServices are only ever enabled on purpose: ress enable-units%s\n' "$c_dim" "$c_reset"
+      printf '%sServices are only ever enabled on purpose: ttr enable-units%s\n' "$c_dim" "$c_reset"
   fi
   if (( ${have[config]} < ${want[config]} )); then
-    printf '%sDotfiles here differ from the vault%s — usually because you have edited them\nsince the backup. `ress diff` shows what changed; `ress backup` records it.\n' \
+    printf '%sDotfiles here differ from the vault%s — usually because you have edited them\nsince the backup. `ttr diff` shows what changed; `ttr backup` records it.\n' \
       "$c_dim" "$c_reset"
   fi
   return 1
@@ -2483,7 +2467,7 @@ cmd_scan() {
     esac
   done
   resolve_vault
-  has_manifest || die "no vault at $VAULT — run: ress backup"
+  has_manifest || die "no vault at $VAULT — run: ttr backup"
 
   secret_scan "$VAULT/home" "$VAULT/omarchy" || true
 
@@ -2519,7 +2503,7 @@ cmd_enable_units() {
   done
 
   resolve_vault
-  has_manifest || die "no vault at $VAULT — run: ress backup"
+  has_manifest || die "no vault at $VAULT — run: ttr backup"
   have systemctl || die "systemctl is not here, so there is nothing to enable"
 
   local units=() unit
@@ -2577,15 +2561,15 @@ cmd_enable_units() {
 }
 
 # The plugin lives under ~/.config/omarchy/plugins, which is not on anyone's
-# PATH. One symlink into ~/.local/bin makes `ress` a real command; the plugin
+# PATH. One symlink into ~/.local/bin makes `ttr` a real command; the plugin
 # folder itself stays symlink-free, which the manifest validator requires.
 cmd_link() {
-  local target="$HOME/.local/bin/ress"
+  local target="$HOME/.local/bin/ttr"
   mkdir -p "$HOME/.local/bin"
-  ln -sf "$SELF_DIR/ress" "$target"
-  printf 'Linked %s -> %s\n' "$target" "$SELF_DIR/ress"
+  ln -sf "$SELF_DIR/ttr" "$target"
+  printf 'Linked %s -> %s\n' "$target" "$SELF_DIR/ttr"
   case ":$PATH:" in
-    *":$HOME/.local/bin:"*) printf 'Run: %sress doctor%s\n' "$c_green" "$c_reset" ;;
+    *":$HOME/.local/bin:"*) printf 'Run: %sttr doctor%s\n' "$c_green" "$c_reset" ;;
     *) printf '%s~/.local/bin is not on your PATH. Add it to ~/.bashrc:%s\n  export PATH="$HOME/.local/bin:$PATH"\n' "$c_yellow" "$c_reset" ;;
   esac
 }
@@ -2594,7 +2578,7 @@ vault_is_initialised() { [[ -d "$VAULT/.git" ]]; }
 
 cmd_doctor() {
   local problems=0
-  printf '%sress doctor%s\n\n' "$c_bold" "$c_reset"
+  printf '%stether doctor%s\n\n' "$c_bold" "$c_reset"
   # Takes a command, never a string to eval: an eval of an interpolated config
   # value is exactly the shape a scanner and a reviewer both stop on.
   check() {
@@ -2616,9 +2600,9 @@ cmd_doctor() {
   check "omarchy CLI"    ""  have omarchy
   check "shell running"  "the panel needs omarchy-shell; the CLI does not"  omarchy-shell shell ping
   resolve_vault
-  check "vault"          "run: ress init"          vault_is_initialised
+  check "vault"          "run: ttr init"          vault_is_initialised
   check "git identity"   ""                        git config --global user.email
-  check "ress on PATH"   "run: $SELF_DIR/ress link" command -v ress
+  check "ttr on PATH"    "run: $SELF_DIR/ttr link" command -v ttr
   printf '\n'
   (( problems == 0 )) && printf '%sReady.%s\n' "$c_green" "$c_reset" ||
     printf '%s%s.%s\n' "$c_yellow" "$(plural "$problems" problem)" "$c_reset"
@@ -2752,7 +2736,7 @@ cmd_diff() {
 
   if [[ -z $added && -z $removed && -z $dirty ]]; then
     printf '%sNothing has changed since the last backup.%s\n' "$c_green" "$c_reset"
-    printf '%sTry `ress diff --stock` to see how far this machine is from a fresh Omarchy.%s\n' "$c_dim" "$c_reset"
+    printf '%sTry `ttr diff --stock` to see how far this machine is from a fresh Omarchy.%s\n' "$c_dim" "$c_reset"
   fi
   return 0
 }
@@ -2766,7 +2750,7 @@ cmd_diff() {
 # carry a script — not by policy, but because there is nowhere to put one.
 
 PROFILE_SCHEMA=1
-PROFILE_DIR_DEFAULT="${XDG_DATA_HOME:-$HOME/.local/share}/ress/profile"
+PROFILE_DIR_DEFAULT="${XDG_DATA_HOME:-$HOME/.local/share}/tether/profile"
 APPLY_WORK=""
 
 # ---------------------------------------------------- untrusted vault input
@@ -2846,7 +2830,9 @@ clone_pinned() {
   return 1
 }
 
-RESS_HOST="ress.sh"
+# A third-party redirector, not ours — kept as a short-link option, unrelated
+# to this project's own name.
+SHARE_HOST="ress.sh"
 
 # ress.sh is a redirector and nothing else — no account, no upload, no copy of
 # your profile. `ress.sh/gh/you/repo` means `github.com/you/repo` and is
@@ -2862,8 +2848,8 @@ normalize_source() {
   src="${src%/}"
 
   case "$src" in
-    "$RESS_HOST"/gh/*) src="github.com/${src#"$RESS_HOST"/gh/}" ;;
-    "$RESS_HOST"/*)    src="github.com/${src#"$RESS_HOST"/}" ;;
+    "$SHARE_HOST"/gh/*) src="github.com/${src#"$SHARE_HOST"/gh/}" ;;
+    "$SHARE_HOST"/*)    src="github.com/${src#"$SHARE_HOST"/}" ;;
     gh/*)              src="github.com/${src#gh/}" ;;
     github.com/*|gitlab.com/*|codeberg.org/*|raw.githubusercontent.com/*) ;;
     */*/*) ;;
@@ -2892,15 +2878,15 @@ same_remote() {
   [[ -n $a && $a == "$b" ]]
 }
 
-# The paste-me form of a repo URL, for `ress share`.
-ress_link() {
+# The paste-me form of a repo URL, for `ttr share`.
+share_link() {
   local url="$1"
   url="${url%.git}"
   url="${url#git@github.com:}"
   url="${url#https://github.com/}"
   url="${url#http://github.com/}"
   [[ $url == "$1" ]] && { printf '%s' "$1"; return 0; }
-  printf '%s/gh/%s' "$RESS_HOST" "$url"
+  printf '%s/gh/%s' "$SHARE_HOST" "$url"
 }
 
 collect_webapps_json() {
@@ -3001,7 +2987,7 @@ $n_plug shell plugins, $n_web web apps, on the \`$theme\` theme.
 Make your machine look like this one:
 
 \`\`\`bash
-ress apply <this-repo-url>
+ttr apply <this-repo-url>
 \`\`\`
 
 It shows you everything it would install and asks before it installs any of it.
@@ -3025,7 +3011,7 @@ PROFILE_README
   local origin link
   origin=$(git -C "$out" remote get-url origin 2>/dev/null || true)
   link=""
-  [[ -n $origin ]] && link=$(ress_link "$origin")
+  [[ -n $origin ]] && link=$(share_link "$origin")
   if [[ -n $link ]]; then
     CFG[PROFILE_URL]="$link"
     save_config
@@ -3035,11 +3021,11 @@ PROFILE_README
   if (( ! PORCELAIN )); then
     printf '\n%sLoadout written to %s%s\n\n' "$c_bold" "$out" "$c_reset"
     if [[ -n $link ]]; then
-      printf 'Share this line:\n\n  %sress apply %s%s\n\n' "$c_green" "$link" "$c_reset"
+      printf 'Share this line:\n\n  %sttr apply %s%s\n\n' "$c_green" "$link" "$c_reset"
     else
       printf 'Push it to a public repo, then share the one-liner:\n\n'
       printf '  %scd %s\n  git remote add origin git@github.com:you/my-omarchy-loadout.git\n  git push -u origin main%s\n\n' "$c_dim" "$out" "$c_reset"
-      printf '  %sress apply https://github.com/you/my-omarchy-loadout%s\n\n' "$c_green" "$c_reset"
+      printf '  %sttr apply https://github.com/you/my-omarchy-loadout%s\n\n' "$c_green" "$c_reset"
     fi
   fi
 }
@@ -3070,12 +3056,12 @@ fetch_profile() {
   valid_int "$schema" ||
     die "this loadout does not declare a schema version as a number — refusing to read it"
   (( schema == PROFILE_SCHEMA )) ||
-    die "loadout schema $(plain "$schema") is not readable by ress $VERSION"
+    die "loadout schema $(plain "$schema") is not readable by tether $VERSION"
 }
 
 cmd_apply() {
   local source="${1:-}"
-  [[ -n $source ]] || die "usage: ress apply <ress.sh/gh/user/repo | git-url | profile.json>"
+  [[ -n $source ]] || die "usage: ttr apply <ress.sh/gh/user/repo | git-url | profile.json>"
   source=$(normalize_source "$source")
   shift || true
   while (( $# > 0 )); do
@@ -3280,40 +3266,40 @@ cmd_apply() {
 
 usage() {
   cat <<USAGE
-${c_bold}ress${c_reset} $VERSION — capture an Omarchy machine, replay it onto a fresh one.
+${c_bold}tether${c_reset} $VERSION — capture an Omarchy machine, replay it onto a fresh one.
 
-  ${c_bold}ress backup${c_reset} [-m MSG] [--push] [--secrets]
+  ${c_bold}ttr backup${c_reset} [-m MSG] [--push] [--secrets]
       Capture this machine into the vault and commit it.
 
-  ${c_bold}ress restore${c_reset} [--from GIT_URL] [--only LIST] [--skip LIST] [--dry-run]
+  ${c_bold}ttr restore${c_reset} [--from GIT_URL] [--only LIST] [--skip LIST] [--dry-run]
       Replay a vault onto this machine. Resumable; rerun to continue.
       Two things it will not do without being asked: build an AUR package
       (--aur, --no-aur, --review-aur) and enable a systemd user service
       (--enable-units, --no-enable-units). --yes does not answer either.
 
-  ${c_bold}ress share${c_reset} [--name NAME] [--description TEXT] [--out DIR]
+  ${c_bold}ttr share${c_reset} [--name NAME] [--description TEXT] [--out DIR]
       Export a loadout: the package, plugin, web app and theme list, with
       nothing from your home directory. Push it and share the URL.
 
-  ${c_bold}ress apply${c_reset} <git-url> [--dry-run]
+  ${c_bold}ttr apply${c_reset} <git-url> [--dry-run]
       Install someone else's loadout. Shows the full list and asks first.
 
-  ${c_bold}ress verify${c_reset} [--json]      Check this machine against the vault, and
+  ${c_bold}ttr verify${c_reset} [--json]       Check this machine against the vault, and
                             exit non-zero if it does not match.
-  ${c_bold}ress scan${c_reset} [--json]        Look through the vault for anything shaped
+  ${c_bold}ttr scan${c_reset} [--json]         Look through the vault for anything shaped
                             like a credential.
-  ${c_bold}ress enable-units${c_reset} [--all|--list] [UNIT...]
+  ${c_bold}ttr enable-units${c_reset} [--all|--list] [UNIT...]
                             Turn on the user services a backup recorded,
                             after reading what each one runs.
 
-  ${c_bold}ress status${c_reset} [--json]      What is captured, and when.
-  ${c_bold}ress diff${c_reset} [--stock]       What changed since the last backup, or how
+  ${c_bold}ttr status${c_reset} [--json]       What is captured, and when.
+  ${c_bold}ttr diff${c_reset} [--stock]        What changed since the last backup, or how
                             far this machine is from a stock Omarchy install.
-  ${c_bold}ress init${c_reset} [--remote URL]  Create the vault.
-  ${c_bold}ress set${c_reset} KEY=VALUE        Change a setting.
-  ${c_bold}ress secrets${c_reset} <init|list|add|enable|disable>
-  ${c_bold}ress doctor${c_reset}               Check this machine is ready.
-  ${c_bold}ress link${c_reset}                 Put \`ress\` on your PATH (~/.local/bin).
+  ${c_bold}ttr init${c_reset} [--remote URL]   Create the vault.
+  ${c_bold}ttr set${c_reset} KEY=VALUE         Change a setting.
+  ${c_bold}ttr secrets${c_reset} <init|list|add|enable|disable>
+  ${c_bold}ttr doctor${c_reset}                Check this machine is ready.
+  ${c_bold}ttr link${c_reset}                  Put \`ttr\` on your PATH (~/.local/bin).
 
 Loadout links are ress.sh/gh/<user>/<repo>, which is a redirect to GitHub and
 nothing else — resolved on this machine, before any request is made. Plain
@@ -3322,7 +3308,7 @@ GitHub URLs work everywhere a ress.sh link does.
 Categories: ${CATEGORIES[*]}
 Config:     $CONFIG_FILE
 Settings:   AUR=${CFG[AUR]} ENABLE_UNITS=${CFG[ENABLE_UNITS]} SECRET_SCAN=${CFG[SECRET_SCAN]}
-            CAPTURE_AUTOSTART=${CFG[CAPTURE_AUTOSTART]}   (change with \`ress set KEY=VALUE\`)
+            CAPTURE_AUTOSTART=${CFG[CAPTURE_AUTOSTART]}   (change with \`ttr set KEY=VALUE\`)
 USAGE
 }
 

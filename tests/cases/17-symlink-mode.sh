@@ -1,22 +1,22 @@
-# The live-symlink mode: a path on ~/.config/ress/symlink is linked into the
+# The live-symlink mode: a path on ~/.config/tether/symlink is linked into the
 # vault instead of rsync-copied, so an edit on either side is visible on the
-# other without running `ress backup` again — and a restore recreates the
+# other without running `ttr backup` again — and a restore recreates the
 # same link, backing up (never discarding) a real file that diverged.
 
 seed_machine
-mkdir -p "$HOME/.config/ress"
-printf '.claude\n' >"$HOME/.config/ress/symlink"
+mkdir -p "$HOME/.config/tether"
+printf '.claude\n' >"$HOME/.config/tether/symlink"
 mkdir -p "$HOME/.claude"
 printf '{"model":"test"}\n' >"$HOME/.claude/settings.json"
 printf '{"fake":"secret"}\n' >"$HOME/.claude/.credentials.json"
 
-ress init
-assert_ok "ress init"
+ttr init
+assert_ok "ttr init"
 
-VAULT="$XDG_DATA_HOME/ress/vault"
+VAULT="$XDG_DATA_HOME/tether/vault"
 
-ress backup -m "first"
-assert_ok "ress backup"
+ttr backup -m "first"
+assert_ok "ttr backup"
 
 assert_file "$VAULT/home/.claude/settings.json" "vault holds .claude's captured content"
 assert_file_contains "$VAULT/home/.claude/settings.json" "test"
@@ -40,7 +40,7 @@ else
   _pass
 fi
 
-# Edit through the symlink — no second `ress backup` needed for the vault to
+# Edit through the symlink — no second `ttr backup` needed for the vault to
 # see it, because $HOME/.claude and $VAULT/home/.claude are now the same tree.
 printf 'edited-through-the-link\n' >"$HOME/.claude/note.txt"
 assert_file "$VAULT/home/.claude/note.txt" "an edit through the live symlink lands directly in the vault"
@@ -50,8 +50,8 @@ assert_file "$VAULT/home/.claude/note.txt" "an edit through the live symlink lan
 # at the same vault).
 rm -f "$HOME/.claude"
 
-ress restore --only config --yes
-assert_ok "ress restore --only config"
+ttr restore --only config --yes
+assert_ok "ttr restore --only config"
 
 if [[ -L $HOME/.claude ]]; then _pass; else _fail ".claude is a symlink after restore"; fi
 assert_file_contains "$HOME/.claude/settings.json" "test" "restore recreates the link back to the vault's content"
@@ -62,9 +62,9 @@ rm -f "$HOME/.claude"
 mkdir -p "$HOME/.claude"
 printf '{"model":"diverged"}\n' >"$HOME/.claude/settings.json"
 
-ress restore --only config --restart --yes
-assert_ok "ress restore --only config (diverged)"
-assert_file "$HOME/.claude.ress-bak/settings.json" "the diverged directory is backed up, not discarded"
-assert_file_contains "$HOME/.claude.ress-bak/settings.json" "diverged"
+ttr restore --only config --restart --yes
+assert_ok "ttr restore --only config (diverged)"
+assert_file "$HOME/.claude.tether-bak/settings.json" "the diverged directory is backed up, not discarded"
+assert_file_contains "$HOME/.claude.tether-bak/settings.json" "diverged"
 if [[ -L $HOME/.claude ]]; then _pass; else _fail ".claude is relinked to the vault after the diverged restore"; fi
 assert_file_contains "$HOME/.claude/settings.json" "\"test\"" "the vault's version wins after the diverged restore"

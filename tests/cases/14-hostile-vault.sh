@@ -54,7 +54,7 @@ DESKTOP
 
 seal_vault "$VAULT" "hostile"
 
-ress --vault "$VAULT" restore --yes --aur
+ttr --vault "$VAULT" restore --yes --aur
 assert_ok "the restore survives a vault full of bad input"
 
 # Nothing option-shaped or traversing reached a command line.
@@ -85,11 +85,11 @@ assert_no_file "$HOME/.config/omarchy/plugins/local.plugin"
 
 # ---- a filename that tries to repaint the terminal ------------------------
 
-ress init >/dev/null
+ttr init >/dev/null
 mkdir -p "$HOME/.local/bin"
 printf 'TOKEN=ghp_A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8\n' \
   >"$HOME/.local/bin/$(printf 'deploy\033[31m')"
-ress backup -m hostile
+ttr backup -m hostile
 assert_ok "backup with a hostile filename"
 assert_output "Possible credentials in the vault"
 BAD=$(printf '%s' "$OUT" | grep -c "$(printf '\033')\[31m" || true)
@@ -103,34 +103,34 @@ assert_equals "$BAD" "0" "the finding list carries no escape sequence from the f
 # command — on the --from path, before any prompt.
 EVIL=$(make_vault "$SANDBOX/evil-schema")
 jq -n --arg s "CFG[\$(touch $SANDBOX/EXECUTED)]" \
-  '{schemaVersion: $s, ressVersion: "1.1.0", createdAt: "x",
+  '{schemaVersion: $s, tetherVersion: "1.1.0", createdAt: "x",
     machine: {hostname: "h", user: "u", omarchy: "4", kernel: "6"},
-    categories: [], counts: {}}' >"$EVIL/ress.json"
+    categories: [], counts: {}}' >"$EVIL/tether.json"
 git -C "$EVIL" add -A
 git -C "$EVIL" -c commit.gpgsign=false commit -q -m evil
 
-ress --vault "$EVIL" restore --dry-run
+ttr --vault "$EVIL" restore --dry-run
 assert_fails "a vault with a non-numeric schema is refused"
 assert_output "not declare a schema version as a number"
 assert_no_file "$SANDBOX/EXECUTED" "and nothing it wrote there was executed"
 
-ress --vault "$EVIL" restore --yes
+ttr --vault "$EVIL" restore --yes
 assert_fails "the same on a real restore"
 assert_no_file "$SANDBOX/EXECUTED"
 
-# The same field in a loadout, which `ress apply` reads before its confirmation.
+# The same field in a loadout, which `ttr apply` reads before its confirmation.
 PROFILE="$SANDBOX/evil-loadout"
 mkdir -p "$PROFILE"
 jq -n --arg s "CFG[\$(touch $SANDBOX/EXECUTED2)]" \
   '{schemaVersion: $s, kind: "omarchy-loadout", name: "x", author: "y",
     packages: {native: [], aur: []}, plugins: [], webapps: [],
     theme: {name: "", url: "", commit: ""}}' >"$PROFILE/profile.json"
-ress apply --dry-run "$PROFILE"
+ttr apply --dry-run "$PROFILE"
 assert_fails "a loadout with a non-numeric schema is refused"
 assert_no_file "$SANDBOX/EXECUTED2" "and nothing it wrote there was executed"
 
 # A real numeric schema from the future is still refused, but politely.
-jq '.schemaVersion = 99' "$EVIL/ress.json" >"$EVIL/x" && mv "$EVIL/x" "$EVIL/ress.json"
-ress --vault "$EVIL" restore --yes
+jq '.schemaVersion = 99' "$EVIL/tether.json" >"$EVIL/x" && mv "$EVIL/x" "$EVIL/tether.json"
+ttr --vault "$EVIL" restore --yes
 assert_fails "a schema from the future is refused"
 assert_output "vault schema 99 is not readable"

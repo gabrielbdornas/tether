@@ -22,19 +22,19 @@ Item {
   property string omarchyPath: Quickshell.env("OMARCHY_PATH")
 
   readonly property string home: Quickshell.env("HOME")
-  readonly property string configPath: home + "/.config/ress/config"
-  readonly property string stampPath: home + "/.local/state/ress/last-backup"
-  readonly property string attemptPath: home + "/.local/state/ress/last-attempt"
-  readonly property string runningPath: home + "/.local/state/ress/running"
+  readonly property string configPath: home + "/.config/tether/config"
+  readonly property string stampPath: home + "/.local/state/tether/last-backup"
+  readonly property string attemptPath: home + "/.local/state/tether/last-attempt"
+  readonly property string runningPath: home + "/.local/state/tether/running"
   // decodeURIComponent because a $HOME containing a space arrives percent-encoded
   // in a file: URL, and every subsequent Process would fail on the literal %20.
-  readonly property string cli: decodeURIComponent(Qt.resolvedUrl("bin/ress").toString().replace(/^file:\/\//, ""))
+  readonly property string cli: decodeURIComponent(Qt.resolvedUrl("bin/ttr").toString().replace(/^file:\/\//, ""))
 
   // ------------------------------------------------------------------ state
   property var config: ({})
   property int lastBackup: 0
   property int lastAttempt: 0
-  // Another ress process (typically the headless scheduler) holds the lock.
+  // Another tether process (typically the headless scheduler) holds the lock.
   property bool externallyBusy: false
   property int now: Math.floor(Date.now() / 1000)
   property var status: null
@@ -61,7 +61,7 @@ Item {
   // minute at a time for a visible "4m ago", and far more slowly otherwise —
   // nothing on the bar changes faster than the stale threshold.
   property bool uiActive: false
-  readonly property string vault: setting("VAULT", home + "/.local/share/ress/vault")
+  readonly property string vault: setting("VAULT", home + "/.local/share/tether/vault")
   readonly property string remote: setting("REMOTE", "")
   readonly property bool autoBackup: setting("AUTO_BACKUP", "off") === "on"
   // The two things a restore will not do without being asked. Three states
@@ -78,7 +78,7 @@ Item {
   }
 
   // The CLI's own defaults, for a machine that has never written a config file.
-  // Falling back to "off" drew all six toggles off while `ress backup` would in
+  // Falling back to "off" drew all six toggles off while `ttr backup` would in
   // fact capture five of them — the panel disagreeing with the engine about
   // what the next backup does.
   readonly property var categoryDefaults: ({
@@ -179,7 +179,7 @@ Item {
 
   // execDetached rather than a shared Process: assigning `command` to a Process
   // that is still running drops the write, so a second quick toggle vanished.
-  // Two of these landing at once is safe because `ress set` takes a lock on the
+  // Two of these landing at once is safe because `ttr set` takes a lock on the
   // config file and re-reads it inside that lock — it is not the vault lock,
   // which would make the bar show a backup running for a settings change.
   function setCategory(key, on) {

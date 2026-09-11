@@ -9,11 +9,11 @@ import "Model.js" as Model
 
 // One bar icon and one panel: how fresh the backup is, what it holds, and the
 // two buttons that matter. Everything here is a thin face over
-// bin/ress — the panel never touches the filesystem itself.
+// bin/ttr — the panel never touches the filesystem itself.
 Panel {
   id: root
-  moduleName: "tsouth89.resurrect"
-  ipcTarget: "tsouth89.resurrect"
+  moduleName: "gabrielbdornas.tether"
+  ipcTarget: "gabrielbdornas.tether"
   manageIpc: false
 
   // ------------------------------------------------------------------ theme
@@ -112,7 +112,7 @@ Panel {
         copyProc.running = true
         break
       case "folder":
-        Quickshell.execDetached(["xdg-open", engine.home + "/.local/share/ress/profile"])
+        Quickshell.execDetached(["xdg-open", engine.home + "/.local/share/tether/profile"])
         break
       case "url":
         urlField.forceActiveFocus()
@@ -139,7 +139,7 @@ Panel {
   function flash(message) { notice = message; noticeTimer.restart() }
 
   readonly property string shareCommand:
-    "ress apply " + engine.setting("PROFILE_URL", "ress.sh/gh/<you>/<your-loadout>")
+    "ttr apply " + engine.setting("PROFILE_URL", "ress.sh/gh/<you>/<your-loadout>")
 
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
@@ -282,7 +282,7 @@ Panel {
           // ------------------------------------------------------------ hero
           PanelHero {
             width: parent.width
-            title: "ress"
+            title: "tether"
             meta: engine.anyBusy ? (engine.currentStep || "Working…")
               : engine.externallyBusy ? "Scheduled backup running…"
               : engine.lastBackup > 0 ? ("Backed up " + engine.agoText)

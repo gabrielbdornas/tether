@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
-  "id": "gabrielbdornas.ress",
-  "name": "ress",
-  "version": "1.1.0",
-  "author": "Gabriel Dornas (based on ress by Tyler South)",
+  "id": "gabrielbdornas.tether",
+  "name": "tether",
+  "version": "1.2.0",
+  "author": "Gabriel Dornas",
   "license": "MIT",
-  "description": "Capture this machine \u2014 packages, dotfiles, themes, web apps, plugins \u2014 and replay it onto a fresh Omarchy install. Share the loadout as a link.",
-  "homepage": "https://github.com/gabrielbdornas/dotfiles",
+  "description": "Capture this machine — packages, dotfiles, themes, web apps, plugins — and replay it onto a fresh Omarchy install, or keep it live-synced across machines.",
+  "homepage": "https://github.com/gabrielbdornas/tether",
   "kinds": [
     "bar-widget",
     "service"
@@ -16,14 +16,15 @@
     "service": "Service.qml"
   },
   "barWidget": {
-    "displayName": "ress",
+    "displayName": "tether",
     "description": "Backup freshness at a glance, with one button to capture this machine and one to bring it back.",
     "category": "System",
     "aliases": [
-      "ress",
-      "resurrect",
+      "tether",
+      "ttr",
       "backup",
-      "restore"
+      "restore",
+      "sync"
     ],
     "allowMultiple": false,
     "defaultSection": "right",

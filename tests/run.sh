@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# ress test runner.
+# tether test runner.
 #
 #   tests/run.sh              run every case
 #   tests/run.sh restore      run cases whose name matches "restore"
@@ -25,8 +25,8 @@ for arg in "$@"; do
 done
 
 # Syntax first: a parse error makes every case fail in the same confusing way.
-if ! bash -n "$REPO_DIR/bin/ress"; then
-  printf '\e[31mbin/ress does not parse.\e[0m\n' >&2
+if ! bash -n "$REPO_DIR/bin/ttr"; then
+  printf '\e[31mbin/ttr does not parse.\e[0m\n' >&2
   exit 1
 fi
 

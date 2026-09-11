@@ -5,14 +5,14 @@ machine_install foreign some-aur-tool
 seed_plugin tsouth89.example
 seed_webapp Excalidraw https://excalidraw.com
 
-ress init
-assert_ok "ress init"
+ttr init
+assert_ok "ttr init"
 
-VAULT="$XDG_DATA_HOME/ress/vault"
+VAULT="$XDG_DATA_HOME/tether/vault"
 assert_dir "$VAULT/.git" "init creates a git vault"
 
-ress backup -m "first"
-assert_ok "ress backup"
+ttr backup -m "first"
+assert_ok "ttr backup"
 
 assert_file "$VAULT/packages/native.txt"
 assert_file_contains "$VAULT/packages/foreign.txt" "some-aur-tool"
@@ -26,11 +26,11 @@ assert_file "$VAULT/omarchy/shell.json"
 assert_equals "$(git -C "$VAULT" rev-list --count HEAD)" "1" "one commit"
 assert_equals "$(git -C "$VAULT" log -1 --pretty=%s)" "first" "commit subject"
 
-ress status
-assert_ok "ress status"
+ttr status
+assert_ok "ttr status"
 assert_output "backups    1"
 
-ress status --json
-assert_ok "ress status --json"
+ttr status --json
+assert_ok "ttr status --json"
 assert_equals "$(jq -r '.hasVault' <<<"$OUT")" "1" "status reports a vault"
 assert_equals "$(jq -r '.manifest.machine.user' <<<"$OUT")" "$USER" "manifest records the user"
