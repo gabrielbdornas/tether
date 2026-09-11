@@ -1,4 +1,4 @@
-# Testing ress
+# Testing tether
 
 Four layers, in the order they catch things. The first three run on any machine
 in about a minute. The fourth needs a VM, and there are exactly six things only
@@ -21,7 +21,7 @@ which is most of what the consent work is about.
 The `git` double is the subtle one: it rewrites `https://github.com/example/…`
 to a local path, but only for `clone`, `fetch`, `pull`, `push` and `ls-remote`.
 Rewriting globally would make capture record a `/tmp` path and restore then
-refuse it as an unsafe remote — an artefact of the test rather than of ress.
+refuse it as an unsafe remote — an artefact of the test rather than of tether.
 
 ## 2. Mutation testing
 
@@ -62,9 +62,9 @@ before a release. None of them touches the live desktop or the real vault.
 ```bash
 # A real capture of this machine into a scratch vault, then the round-trip
 # invariant: a vault captured from a machine must verify against that machine.
-ress backup  --vault /tmp/rt-vault -m "round trip"
-ress verify  --vault /tmp/rt-vault      # expect: matches, exit 0
-ress scan    --vault /tmp/rt-vault
+ttr backup  --vault /tmp/rt-vault -m "round trip"
+ttr verify  --vault /tmp/rt-vault       # expect: matches, exit 0
+ttr scan    --vault /tmp/rt-vault
 
 # A real restore into a scratch home. Three commands must not reach the running
 # session, so shadow them: a shell restart, the IPC client that edits the live
@@ -76,7 +76,7 @@ printf '#!/bin/sh\nexit 0\n' > /tmp/rt-bin/omarchy-theme-set
 chmod +x /tmp/rt-bin/*
 
 env -i HOME=/tmp/rt-home PATH="/tmp/rt-bin:$PATH" TERM=dumb USER="$USER" \
-  ress restore --from /tmp/rt-vault --yes --no-enable-units --skip packages
+  ttr restore --from /tmp/rt-vault --yes --no-enable-units --skip packages
 ```
 
 `--skip packages` because installing them for real needs root, and
@@ -84,15 +84,10 @@ env -i HOME=/tmp/rt-home PATH="/tmp/rt-bin:$PATH" TERM=dumb USER="$USER" \
 rather than to `$HOME` — enabling a unit for a scratch home would enable it in
 your real session.
 
-Then check the upgrade path on a copy of a vault written by the previous
-version, and the update mechanism on a copy of the installed plugin:
+Then check the update mechanism on a copy of the installed plugin:
 
 ```bash
-cp -a ~/.local/share/ress/vault /tmp/upgrade-vault
-git -C /tmp/upgrade-vault remote remove origin      # so nothing can be pushed
-ress backup --vault /tmp/upgrade-vault              # expect the manifest rename
-
-cp -a ~/.config/omarchy/plugins/tsouth89.resurrect /tmp/plugin-update
+cp -a ~/.config/omarchy/plugins/gabrielbdornas.tether /tmp/plugin-update
 git -C /tmp/plugin-update fetch origin HEAD
 git -C /tmp/plugin-update merge --ff-only FETCH_HEAD
 omarchy-plugin-validate /tmp/plugin-update
