@@ -23,6 +23,7 @@
 **/hosts.yml
 **/credentials
 **/credentials.json
+**/.credentials.json
 **/credentials.yml
 **/*.key
 **/*.pem

@@ -8,6 +8,7 @@ mkdir -p "$HOME/.config/ress"
 printf '.claude\n' >"$HOME/.config/ress/symlink"
 mkdir -p "$HOME/.claude"
 printf '{"model":"test"}\n' >"$HOME/.claude/settings.json"
+printf '{"fake":"secret"}\n' >"$HOME/.claude/.credentials.json"
 
 ress init
 assert_ok "ress init"
@@ -25,6 +26,18 @@ if [[ $(readlink -f "$HOME/.claude") == "$(readlink -f "$VAULT/home/.claude")" ]
   _pass
 else
   _fail ".claude resolves to the vault's copy"
+fi
+
+# The exclude list is meant to keep credential-shaped files out of git
+# history, but capture_symlink_entry moves a symlink-mode path in wholesale
+# - the file still has to exist on disk for the $HOME symlink to resolve to
+# it. So the guarantee that actually holds here is "on disk, never
+# committed", not "never captured" the way an rsync-copied entry works.
+assert_file "$VAULT/home/.claude/.credentials.json" ".credentials.json stays on disk in the vault (the symlink needs it there)"
+if git -C "$VAULT" ls-files --error-unmatch home/.claude/.credentials.json >/dev/null 2>&1; then
+  _fail ".credentials.json must not be committed to the vault's git history"
+else
+  _pass
 fi
 
 # Edit through the symlink — no second `ress backup` needed for the vault to

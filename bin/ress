@@ -347,6 +347,14 @@ capture_config() {
   local excludes; excludes=$(build_excludes)
   printf '%s\n' ".config/omarchy/" >>"$excludes"
 
+  # Symlink-mode entries (capture_symlink_entry, below) move real content
+  # into $out wholesale - a credential file inside one has to stay on disk
+  # here for the $HOME symlink to resolve to it, so the exclude list can't
+  # keep it out of the vault the way it does for rsync-copied entries. The
+  # next best thing, and the guarantee the list actually promises ("never
+  # leave the machine in the clear"), is keeping it out of git history.
+  cp "$excludes" "$out/.gitignore"
+
   local entries=() entry present=0 missing=0
   while IFS= read -r entry; do entries+=("$entry"); done < <(merged_list include)
   # Opt-in, and never silently: every entry under it is a command that runs at
