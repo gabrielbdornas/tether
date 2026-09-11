@@ -2717,7 +2717,7 @@ cmd_diff() {
   resolve_vault
   [[ -d $VAULT/.git ]] || die "no vault at $VAULT"
 
-  local now added="" removed="" dirty
+  local now added="" removed="" now_aur aur_added="" aur_removed="" dirty
   now=$(mktemp)
   pacman -Qqen | sort >"$now"
   if [[ -f $VAULT/packages/native.txt ]]; then
@@ -2726,15 +2726,28 @@ cmd_diff() {
   fi
   rm -f "$now"
 
+  now_aur=$(mktemp)
+  pacman -Qqem | sort >"$now_aur"
+  if [[ -f $VAULT/packages/foreign.txt ]]; then
+    aur_added=$(comm -23 "$now_aur" <(sort -u "$VAULT/packages/foreign.txt") || true)
+    aur_removed=$(comm -13 "$now_aur" <(sort -u "$VAULT/packages/foreign.txt") || true)
+  fi
+  rm -f "$now_aur"
+
   [[ -n $added ]] && printf '%sInstalled since the last backup%s\n%s\n\n' \
     "$c_bold" "$c_reset" "$(fmt -w 72 <<<"$added" | sed 's/^/  + /')"
   [[ -n $removed ]] && printf '%sRemoved since the last backup%s\n%s\n\n' \
     "$c_bold" "$c_reset" "$(fmt -w 72 <<<"$removed" | sed 's/^/  - /')"
 
+  [[ -n $aur_added ]] && printf '%sAUR packages installed since the last backup%s\n%s\n\n' \
+    "$c_bold" "$c_reset" "$(fmt -w 72 <<<"$aur_added" | sed 's/^/  + /')"
+  [[ -n $aur_removed ]] && printf '%sAUR packages removed since the last backup%s\n%s\n\n' \
+    "$c_bold" "$c_reset" "$(fmt -w 72 <<<"$aur_removed" | sed 's/^/  - /')"
+
   dirty=$(git_vault status --short 2>/dev/null | head -40)
   [[ -n $dirty ]] && printf '%sUncommitted in the vault%s\n%s\n' "$c_bold" "$c_reset" "$(sed 's/^/  /' <<<"$dirty")"
 
-  if [[ -z $added && -z $removed && -z $dirty ]]; then
+  if [[ -z $added && -z $removed && -z $aur_added && -z $aur_removed && -z $dirty ]]; then
     printf '%sNothing has changed since the last backup.%s\n' "$c_green" "$c_reset"
     printf '%sTry `ttr diff --stock` to see how far this machine is from a fresh Omarchy.%s\n' "$c_dim" "$c_reset"
   fi

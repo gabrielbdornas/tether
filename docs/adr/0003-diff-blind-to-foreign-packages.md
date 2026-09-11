@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed (bug confirmed on a real machine, not yet fixed)
+Accepted and fixed.
 
 ## Context
 
@@ -55,45 +55,49 @@ part of the theory is not yet independently verified against a real
 
 ## Decision
 
-Not fixed yet - this ADR exists to record the finding before moving on, per
-the same "log the bug, come back to it deliberately" pattern this project's
-history already follows (`docs/adr/0001`'s handling of the
-`capture_symlink_entry()` exclude-list bug is the precedent: found on a real
-machine, documented, fixed as a distinct, deliberate step rather than
-folded silently into the same session).
+Found and documented first, fixed as a distinct, deliberate step rather than
+folded silently into the same session - the same "log the bug, come back to
+it deliberately" pattern this project's history already follows
+(`docs/adr/0001`'s handling of the `capture_symlink_entry()` exclude-list bug
+is the precedent).
 
-The fix, once picked up, is expected to mirror the existing native-package
-logic: compute `pacman -Qqem | sort` into a second temp file, `comm -23`/
-`comm -13` it against `sort -u "$VAULT/packages/foreign.txt"` the same way,
-and fold the result into the same "Installed since the last backup" /
-"Removed since the last backup" sections (or a clearly separate foreign-
-package section, if mixing native and AUR names in one list reads as
-confusing) - a design call for whoever implements it, not decided here.
+Fixed by mirroring the existing native-package logic: `cmd_diff()` now also
+computes `pacman -Qqem | sort` into a second temp file and `comm -23`/
+`comm -13`s it against `sort -u "$VAULT/packages/foreign.txt"`. The result is
+printed as its own "AUR packages installed since the last backup" / "AUR
+packages removed since the last backup" pair of sections, kept separate from
+the native "Installed"/"Removed" ones rather than merged into them - an AUR
+addition means a source build the next time this vault is applied elsewhere
+(the same distinction `restore` already draws with its own AUR-specific
+prompt and `--aur` flag), so it reads better called out on its own line than
+folded anonymously into the native list. The "Nothing has changed" message
+now also requires both AUR diffs to be empty, not just the native ones.
 
 ## Consequences
 
-- Until fixed, `ttr diff`'s "Nothing has changed" output cannot be trusted
-  to mean nothing changed - it can only be trusted for native-package
-  changes. Anyone relying on `ttr diff` before a `ttr backup` to decide
-  whether a backup is worth running should not skip the backup on AUR-only
-  changes just because `diff` reported nothing.
+- Before this fix, `ttr diff`'s "Nothing has changed" output could not be
+  trusted to mean nothing changed - it was only trustworthy for
+  native-package changes. That window is now closed.
 - No known impact on `ttr backup`, `ttr restore`, `ttr verify`, or
   `ttr status` - all of those either read `pacman -Qqem` directly
   (`capture_packages`) or read the already-written `foreign.txt` from a
-  completed backup, neither of which goes through `cmd_diff`'s comparison
-  logic.
-- `tests/cases/05-aur.sh` already exists and covers AUR packages in some
-  capacity (capture and/or restore) - worth checking, when this is fixed,
-  whether it already would have caught this or whether `cmd_diff`
-  specifically has no coverage and a new case/assertion is needed.
+  completed backup, neither of which went through `cmd_diff`'s comparison
+  logic. Confirmed by reading every other `native.txt`/`foreign.txt`
+  read site in `bin/ttr`: restore's `missing_native`/`missing_foreign`,
+  `verify_list`, `cmd_status`, and `cmd_diff_stock`'s `mine_raw` all already
+  handled both lists - `cmd_diff` was the one outlier.
+- `tests/cases/05-aur.sh` had AUR coverage for capture and restore, but none
+  for `ttr diff` - a new section (##12) was added there rather than a new
+  file, reusing that case's existing AUR fixtures. It's a direct regression
+  test for this bug: native matching the vault while AUR drifts must not
+  read as "Nothing has changed", and an AUR add/remove must be named in its
+  own section, not silently folded into or omitted from the native one.
 
 ## What's next
 
-- Confirm `ttr backup` actually writes `infisical-bin` into
-  `packages/foreign.txt` on the real machine where this was found (the
-  capture-path theory above is architecturally sound - `capture_packages`
-  reads live `pacman -Qqem` unconditionally - but hasn't been confirmed by
-  an actual backup run yet).
-- Implement the `cmd_diff` fix described above.
-- Check `tests/cases/05-aur.sh` for existing `ttr diff` coverage before
-  deciding whether a new test case is needed vs. extending that one.
+- Confirming `ttr backup` actually writes an AUR package into
+  `packages/foreign.txt` on a real machine (the capture-path theory above is
+  architecturally sound and matches the sandboxed test harness, but was
+  never independently re-verified against a real `ttr backup` run on the
+  machine where this bug was originally found) is left as a real-machine
+  check per `docs/TESTING.md` §4, not something a sandboxed fix can confirm.

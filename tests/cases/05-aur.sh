@@ -128,3 +128,30 @@ ttr_tty --vault "$VAULT" restore --yes --restart --only packages
 assert_ok "Ctrl-D at the AUR prompt does not kill the restore"
 assert_not_called "yay -S" "and counts as no"
 assert_output "Left for later" "with the work recorded as deferred"
+
+# ---- 12. `ttr diff` is not blind to AUR package changes --------------------
+#
+# Regression for docs/adr/0003: cmd_diff only ever compared native packages,
+# so an AUR-only install/removal since the last backup was reported as
+# "Nothing has changed" — trusted purely by accident here, since native
+# already matched.
+
+printf 'ripgrep\n' >"$FAKE_STATE/native.txt"  # matches $VAULT/packages/native.txt exactly
+: >"$FAKE_STATE/foreign.txt"
+machine_install foreign brave-bin questionable new-aur-pkg   # vault also has ttf-fancy, not new-aur-pkg
+ttr --vault "$VAULT" diff
+assert_no_output "Nothing has changed" "native matches, but AUR drifted — must not read as clean"
+assert_output "AUR packages installed since the last backup"
+assert_output "new-aur-pkg" "a package installed but never backed up shows up as added"
+assert_output "AUR packages removed since the last backup"
+assert_output "ttf-fancy" "a package the vault has but this machine no longer does shows up as removed"
+assert_no_output "questionable" "a package present on both sides is not reported as changed"
+
+# Both package lists matching the vault exactly is the only case that reads
+# as clean.
+: >"$FAKE_STATE/foreign.txt"
+machine_install foreign brave-bin ttf-fancy questionable
+ttr --vault "$VAULT" diff
+assert_output "Nothing has changed since the last backup."
+assert_no_output "AUR packages installed" "no drift, nothing to report"
+assert_no_output "AUR packages removed" "no drift, nothing to report"
