@@ -8,3 +8,4 @@ root [README.md](../../README.md) for how to actually use the tool.
 | --- | --- |
 | [0001](0001-vendor-ress-and-add-live-symlink-mode.md) | Vendor `btsouth/omarchy-resurrect` as the base; add a new live-symlink sync mode |
 | [0002](0002-extract-to-standalone-repo-rename-to-tether.md) | Extract from `gabrielbdornas/dotfiles` into this standalone repo; full rename to `tether`/`ttr` |
+| [0003](0003-diff-blind-to-foreign-packages.md) | (Proposed, not fixed) `ttr diff` never checks AUR/foreign packages against the vault - native-only bug |
