@@ -84,7 +84,10 @@ found (the secrets scanner included) before any of it leaves the machine.
 
 The vault is an ordinary git repo at `~/.local/share/tether/vault`. Push it
 somewhere private if you want it off the machine; keep it local if you don't.
-Nothing in tether requires an account, a server, or a service.
+Nothing in tether requires an account, a server, or a service. That remote —
+a private GitHub repo, or any other git host — is also what makes tether work
+*across* machines: `ttr backup --push` on one, `ttr restore --from <url>` on
+another, no daemon or pairing step in between.
 
 ### On a machine that has nothing
 
